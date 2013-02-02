@@ -35,3 +35,8 @@ A little FSM with flag registers is used for taking into acount the key presses.
 
 #### Videos
 # sooooooooooooooooon
+
+
+#### License 
+All the source code present here is under the GPLv3 license. Please see the GPv3License.md attached to this repo for more information.
+
