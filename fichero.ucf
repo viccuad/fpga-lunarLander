@@ -1,0 +1,99 @@
+#salida del oscilador a 100MHz
+#
+NET clk LOC = P8;
+
+	#switches placa superior
+
+#NET clear LOC=K4;
+#NET SW<2> LOC=K3;
+#NET SW<3> LOC=K2;
+#NET SW<4> LOC=J4;
+
+	#switches placa extendida
+
+#NET a<0> LOC=P12;
+#NET a<1> LOC=J1;
+#NET a<2> LOC=H1;
+#NET a<3> LOC=H3;
+#NET a<4> LOC=G2;
+#NET a<5> LOC=K15;
+#NET a<6> LOC=K16;
+#NET a<7> LOC=F15;
+
+#
+	#push buttons placa superior
+#NET SW2 LOC=E11; 
+#NET SW3 LOC=A13; 
+
+	# Push button placa extendida
+#NET startStop LOC=H4;
+#NET startStop LOC=L5;
+#NET puesta0 LOC=N2;
+NET reset LOC=M3;
+
+
+#barra de leds placa extendida
+
+NET aterrizadoOUT LOC=L5;
+#NET DI1 LOC=N2;
+#NET DI2 LOC=M3;
+#NET DI1<0> LOC=N1;
+#NET DI2<0> LOC=T13;
+#NET leds<6> LOC=L15;
+#NET leds<7> LOC=J13;
+#NET leds<8> LOC=H15;
+#NET DI1 LOC=J16;
+#NET DI2 LOC=J14;
+
+
+#Display 7-segmentos de la parte izquierda de la placa extendida:
+
+#NET segs<0> LOC=H14;
+#NET newData LOC=M4;
+#NET segs<2> LOC=P1;
+#NET segs<3> LOC=N3;
+#NET segs<4> LOC=M15;
+#NET segs<5> LOC=H13;
+#NET segs<6> LOC=G16;
+##NET puntoSegs2  LOC=N15;
+#
+##Display 7-segmentos de la parte derecha de la placa extendida
+#
+NET segs<0> loc=E2;
+NET segs<1> loc=E1;
+NET segs<2> loc=F3;
+NET segs<3> loc=F2;
+NET segs<4> loc=G4;
+NET segs<5> loc=G3;
+NET segs<6> loc=G1;
+##NET puntoSegs3   loc=H4;
+
+###Display 7-segmentos de la parte derecha de la placa extendida
+##
+#NET segs<0> loc=E2;
+#NET segs<1> loc=E1;
+#NET segs<2> loc=F3;
+#NET segs<3> loc=F2;
+#NET segs<4> loc=G4;
+#NET segs<5> loc=G3;
+#NET segs<6> loc=G1;
+##NET puntoSegs3   loc=H4;
+
+# PS2
+NET ps2Clk 		  loc=B16;
+NET ps2Data		  loc=E13;
+ 
+# VGA
+NET R(0) loc=C8;
+NET R(1) loc=D6;
+NET R(2) loc=B1;
+NET G(0) loc=A8;
+NET G(1) loc=A5;
+NET G(2) loc=C3;
+NET B(0) loc=C9;
+NET B(1) loc=E7;
+NET B(2) loc=D5;
+NET hSync loc=B7;
+NET vSync loc=D8;
+
+ 
