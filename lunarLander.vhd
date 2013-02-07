@@ -14,16 +14,16 @@ use IEEE.STD_LOGIC_UNSIGNED.ALL;
 ------http://stackoverflow.com/questions/4179414/low-level-c-display-text-pixel-by-pixel
 ------http://www.angelcode.com/products/bmfont/
 
-
-entity lunarLander is
+ 
+entity lunarLander is 
 	port (
     ps2Clk: IN std_logic;
     ps2Data: IN std_logic;
     clk: IN std_logic;
 	 reset: IN std_logic;    --reset activo a baja!
+	 OUThaAterrizado: OUT std_logic;
 	 hSync: OUT std_logic;
 	 Vsync: OUT std_logic;
-	 aterrizadoOUT: OUT std_logic;
 	 segs: OUT std_logic_vector (6 downto 0);
 	 R: OUT std_logic_vector (2 downto 0); -- alconversor D/A
 	 G: OUT std_logic_vector (2 downto 0); -- alconversor D/A
@@ -50,6 +50,8 @@ architecture Behavioral of lunarLander is
 	signal estado: fsmEstados;
 	type fsmEstados2 is (iniciando, jugando, parado, reseteo);
 	signal estado2: fsmEstados2;
+	type fsmEstados3 is (generaAleatOBase, guardaPixelVer, pintarCol);
+	signal estado3: fsmEstados3;
 	
 	--señales PS2
 	signal newData, newDataAck: std_logic;
@@ -65,26 +67,28 @@ architecture Behavioral of lunarLander is
 	signal Gnave,Gmundo,Gbase,G_ml,G_l,G_r,G_mr,Gvel,Gfuego,Gfuel: std_logic_vector (2 downto 0); 
 	signal Bnave,Bmundo,Bbase,B_ml,B_l,B_r,B_mr,Bvel,Bfuego,Bfuel: std_logic_vector (2 downto 0);
 	
+	 --seniales registro lsfr
+	signal D,Q: std_logic_vector (14 downto 0);
+	signal puertaAND: std_logic_vector (0 downto 0);
 
-	--señales juego
+	--señales mundo
 	signal pixelMundoHor, pixelNaveHor: std_logic_vector (7 downto 0); --153 pixeles (10011001)
 	signal pixelMundoVer, pixelNaveVer,pixelAnteriorVer: std_logic_vector (6 downto 0); --102 pixeles
 	signal regBaseDificil1,regBaseDificil2,regBaseFacil: std_logic_vector (6 downto 0); 
 	signal contMod3: std_logic_vector(1 downto 0);
-	signal clContMod3: std_logic;
-	signal generarBases,INhaAterrizado,haAterrizado: std_logic;
+	signal clContMod3,generarBases: std_logic;
+	
+	
+	--señales nave
+	signal haAterrizado,BiestableHaAterrizado: std_logic;
 	signal posNave: std_logic_vector (14 downto 0);  --pixelNaveHor catenado pixelNaveVer
 	signal cuentaVelVertical, cuentaVelHorizontal: std_logic_vector (6 downto 0);  
 	signal muyLentoVertical,lentoVertical,rapidoVertical,muyRapidoVertical: std_logic;
 	signal muyLentoHorizontal,lentoHorizontal,rapidoHorizontal,muyRapidoHorizontal: std_logic;
-
-	 --seniales registro lsfr
-	signal D,Q: std_logic_vector (14 downto 0);
-	signal puertaAND: std_logic_vector (0 downto 0);
-	
-	--seniales juego
 	signal movNave: std_logic_vector (2 downto 0);  -- 000 = no se mueve , 001 = arriba , 010 = abajo , 011 = izquierda, 100 = derecha
 	signal moverNave: std_logic;   
+	
+	--señales juego
 	signal teclaSPC,teclaW,teclaS,teclaA,teclaD: std_logic;
 	signal clTeclaSPC,clTeclaW,clTeclaS,clTeclaA,clTeclaD: std_logic;
 	signal ldTeclaSPC,ldTeclaW,ldTeclaS,ldTeclaA,ldTeclaD: std_logic;
@@ -92,11 +96,11 @@ architecture Behavioral of lunarLander is
 	signal cuentaRapido: STD_LOGIC_VECTOR(21 downto 0); 
 	signal cuentaLento: STD_LOGIC_VECTOR(22 downto 0);  
 	signal cuentaMuyLento: STD_LOGIC_VECTOR(23 downto 0);  
-	signal cuentaMuyMuyLento: STD_LOGIC_VECTOR(30 downto 0); 
-	signal finCuentaMuyRapido,finCuentaRapido,finCuentaLento,finCuentaMuyLento,finCuentaMuyMuyLento: STD_LOGIC;
+	signal cuentaGasolina: STD_LOGIC_VECTOR(30 downto 0); 
+	signal finCuentaMuyRapido,finCuentaRapido,finCuentaLento,finCuentaMuyLento,finCuentaGasolina: STD_LOGIC;
 	signal cuentaContBarrido: std_logic_vector(14 downto 0);
 	signal finCuentaBarrido,enableContBarrido,hayColision: std_logic;
-	signal enableContMundo,finCuentaContMundoHor,pixelAleatorio: std_logic;
+	signal finGenerarMundo: std_logic;
 	
 	--seniales memorias
 	signal DOAmundoMenosSig,DOAmundoMasSig,DOBmundoMenosSig,DOBmundoMasSig: std_logic_vector(0 downto 0);
@@ -104,14 +108,17 @@ architecture Behavioral of lunarLander is
 	signal selPixelMundo: std_logic_vector (14 downto 0);  --pixelMundoHor catenado pixelMundoVer
 	signal WEBmenosSig,WEBmasSig,senialWEB,senialWEA: std_logic; 
 	signal DIB,DOBmundo,DOAmundo: std_logic_vector(0 downto 0);
+	signal senialADDRA: std_logic_vector(13 downto 0);
 
 	--señales de depuracion
 	signal st : std_logic_vector (2 downto 0); 
 
 begin
 
+	OUThaAterrizado <= BiestableHaAterrizado;
+	
+	
 --------------------------- RAM ------------------------------------------------
-	aterrizadoOUT <= haAterrizado;
 
 	selPixelMundo(14 downto 7) <= pixelMundoHor;
 	selPixelMundo(6 downto 0) <= pixelMundoVer;
@@ -128,7 +135,7 @@ begin
 		port map (
 			DOA => DOAmundoMenosSig, -- Port A 1-bit Data Output
 			DOB => DOBmundoMenosSig, -- Port B 2-bit Data Output
-			ADDRA => selPixelPantalla(13 downto 0), -- Port A 14-bit Address Input
+			ADDRA => senialADDRA, -- Port A 14-bit Address Input
 			ADDRB => selPixelMundo(13 downto 0), -- Port B 14-bit Address Input
 			CLKA => clk, -- Port A Clock
 			CLKB => clk, -- Port B Clock
@@ -149,7 +156,7 @@ begin
 		port map (
 			DOA => DOAmundoMasSig, -- Port A 1-bit Data Output
 			DOB => DOBmundoMasSig, -- Port B 1-bit Data Output
-			ADDRA => selPixelPantalla(13 downto 0), -- Port A 14-bit Address Input
+			ADDRA => senialADDRA, -- Port A 14-bit Address Input
 			ADDRB => selPixelMundo(13 downto 0), -- Port B 14-bit Address Input
 			CLKA => clk, -- Port A Clock
 			CLKB => clk, -- Port B Clock
@@ -173,28 +180,12 @@ begin
 														newDataAck => newDataAck
 													);
 
-
-	decodMemorias: process(selPixelMundo,senialWEB,DOBmundoMenosSig,DOBmundoMasSig,
-								  DOAmundoMenosSig,DOAmundoMasSig)
-	begin
-		
-		if (selPixelMundo(14) = '0') then
-			--direccionar a las menos signif
-			WEBmenosSig <= senialWEB;
-			WEBmasSig <= '0';
-			DOBmundo <= DOBmundoMenosSig;
-			DOAmundo <= DOAmundoMenosSig;
-		else
-			--direccionar a las mas signif
-			WEBmenosSig <= '0';
-			WEBmasSig <= senialWEB;
-			DOBmundo <= DOBmundoMasSig;
-			DOAmundo <= DOAmundoMasSig;
-		end if;
-		
-	end process decodMemorias;
-	
-	
+	--multiplexores
+	WEBmenosSig <= senialWEB when (selPixelMundo(14) = '0') else '0';
+	WEBmasSig <= senialWEB when (selPixelMundo(14) = '1') else '0';
+	DOBmundo <= DOBmundoMenosSig when (selPixelMundo(14) = '0') else DOBmundoMasSig;
+	DOAmundo <= DOAmundoMenosSig when (selPixelPantalla(14) = '0') else DOAmundoMasSig;
+	senialADDRA <= selPixelPantalla(13 downto 0) when (enableContBarrido = '0') else cuentaContBarrido(13 downto 0);	
 
 
 ----------------------- PANTALLA -----------------------------------------------
@@ -315,53 +306,55 @@ begin
 	
 	
 	pintarFuego: process(cuentaLineCont,cuentaPixelCont,pixelNaveVer,pixelNaveHor,
-								teclaW,cuentaMuyLento,teclaA,teclaD,cuentaMuyMuyLento)
+								teclaW,cuentaMuyLento,teclaA,teclaD,cuentaGasolina,moverNave)
 	begin
 		-- inicializacion
 		Rfuego <= "000";
 		Gfuego <= "000";
 		Bfuego <= "000";
 		
-		if (teclaW = '1' and cuentaMuyLento(20 downto 20) = "1" and cuentaMuyMuyLento(30 downto 24) /= "0000000") then
-			--pintar amarillo:abajo
-			if ( cuentaLineCont(9 downto 2) = pixelNaveVer and cuentaPixelCont(10 downto 3) = pixelNaveHor) then 
-					Rfuego <= "111";
-					Gfuego <= "111";
-					Bfuego <= "000";
+		if (cuentaGasolina(30 downto 24) /= "0000000" and moverNave = '1') then
+			if (teclaW = '1' and cuentaMuyLento(20 downto 20) = "1") then
+				--pintar amarillo:abajo
+				if ( cuentaLineCont(9 downto 2) = pixelNaveVer and cuentaPixelCont(10 downto 3) = pixelNaveHor) then 
+						Rfuego <= "111";
+						Gfuego <= "111";
+						Bfuego <= "000";
+				end if;
+				--pintar amarillo:abajo
+				if (cuentaLineCont(9 downto 2) = pixelNaveVer+1 and cuentaPixelCont(10 downto 3) = pixelNaveHor) then 
+						Rfuego <= "111";
+						Gfuego <= "111";
+						Bfuego <= "000";
+				end if;
+				--pintar rojo:abajo
+				if (((cuentaLineCont(9 downto 2) = pixelNaveVer+1))
+					and ((cuentaPixelCont(10 downto 3) = pixelNaveHor+1 ) or (cuentaPixelCont(10 downto 3) = pixelNaveHor-1 ))) then 
+						Rfuego <= "111";
+						Gfuego <= "000";
+						Bfuego <= "000";
+				end if;
+				if (cuentaLineCont(9 downto 2) = pixelNaveVer+2 and cuentaPixelCont(10 downto 3) = pixelNaveHor) then 
+						Rfuego <= "111";
+						Gfuego <= "000";
+						Bfuego <= "000";
+				end if;
 			end if;
-			--pintar amarillo:abajo
-			if (cuentaLineCont(9 downto 2) = pixelNaveVer+1 and cuentaPixelCont(10 downto 3) = pixelNaveHor) then 
-					Rfuego <= "111";
-					Gfuego <= "111";
-					Bfuego <= "000";
-			end if;
-			--pintar rojo:abajo
-			if (((cuentaLineCont(9 downto 2) = pixelNaveVer+1))
-				and ((cuentaPixelCont(10 downto 3) = pixelNaveHor+1 ) or (cuentaPixelCont(10 downto 3) = pixelNaveHor-1 ))) then 
+			--pintar fuego lateral a la derecha (voy a la izquierda), he apretado izq
+			if (teclaA = '1' and cuentaMuyLento(20 downto 20) = "1") then
+				if (cuentaLineCont(9 downto 2) = pixelNaveVer-2 and cuentaPixelCont(10 downto 3) = pixelNaveHor+2) then 
 					Rfuego <= "111";
 					Gfuego <= "000";
 					Bfuego <= "000";
+				end if;
 			end if;
-			if (cuentaLineCont(9 downto 2) = pixelNaveVer+2 and cuentaPixelCont(10 downto 3) = pixelNaveHor) then 
+			--pintar fuego lateral a la izquierda (voy a la derecha) he apretado der
+			if (teclaD = '1' and cuentaMuyLento(20 downto 20) = "1") then
+				if (cuentaLineCont(9 downto 2) = pixelNaveVer-2 and cuentaPixelCont(10 downto 3) = pixelNaveHor-2) then 
 					Rfuego <= "111";
 					Gfuego <= "000";
 					Bfuego <= "000";
-			end if;
-		end if;
-		--pintar fuego lateral a la derecha (voy a la izquierda), he apretado izq
-		if (teclaA = '1' and cuentaMuyLento(20 downto 20) = "1") then
-			if (cuentaLineCont(9 downto 2) = pixelNaveVer-2 and cuentaPixelCont(10 downto 3) = pixelNaveHor+2) then 
-				Rfuego <= "111";
-				Gfuego <= "000";
-				Bfuego <= "000";
-			end if;
-		end if;
-		--pintar fuego lateral a la izquierda (voy a la derecha) he apretado der
-		if (teclaD = '1' and cuentaMuyLento(20 downto 20) = "1") then
-			if (cuentaLineCont(9 downto 2) = pixelNaveVer-2 and cuentaPixelCont(10 downto 3) = pixelNaveHor-2) then 
-				Rfuego <= "111";
-				Gfuego <= "000";
-				Bfuego <= "000";
+				end if;
 			end if;
 		end if;
 
@@ -395,25 +388,43 @@ begin
 		--pintar base3_1
 		if (DOAmundo = "1" and 
 			 (cuentaPixelCont(10 downto 3) >= regBaseDificil1 and 
-			  cuentaPixelCont(10 downto 3) < regBaseDificil1 +5) ) then
-			Rbase <= "000";
-			Gbase <= "111";
-			Bbase <= "000";
+			  cuentaPixelCont(10 downto 3) < regBaseDificil1 +5) and 
+			  cuentaLineCont(8 downto 2) = "1101110" 
+			  ) then
+			  
+			  		--F de fuel
+			if ( cuentaLineCont(8 downto 2) >= 110 and cuentaLineCont(8 downto 2) <= 113 and
+			  cuentaPixelCont(10 downto 3) = regBaseDificil1 + 1) then  
+				Rbase <= "111";
+				Gbase <= "111";
+				Bbase <= "111";
+			end if;
+			if ( (cuentaLineCont(8 downto 2) = 110 or cuentaLineCont(8 downto 2) = 112) and
+			  cuentaPixelCont(10 downto 3) = regBaseDificil1 + 2) then  
+				Rbase <= "111";
+				Gbase <= "111";
+				Bbase <= "111";
+			end if;
+			  
+--			  
+--			Rbase <= "100";
+--			Gbase <= "100";
+--			Bbase <= "100";
 		end if;			
 		--pintar base3_2
 		if (DOAmundo = "1" and  
 			 (cuentaPixelCont(10 downto 3) >= regBaseDificil2 and 
 			  cuentaPixelCont(10 downto 3) < regBaseDificil2 +5) ) then
-			Rbase <= "000";
-			Gbase <= "111";
+			Rbase <= "100";
+			Gbase <= "100";
 			Bbase <= "000";
 		end if;		
 		--pintar base facil
 		if (DOAmundo = "1" and 
 			 (cuentaPixelCont(10 downto 3) >= regBaseFacil and 
 			  cuentaPixelCont(10 downto 3) < regBaseFacil +9) ) then
-			Rbase <= "111";
-			Gbase <= "000";
+			Rbase <= "100";
+			Gbase <= "100";
 			Bbase <= "000";
 		end if;		
 	end process pintarBases;
@@ -674,7 +685,7 @@ begin
 	end process pintarVelMuyRapido;
 	
 	
-	pintarGasolina: process(cuentaLineCont,cuentaPixelCont,cuentaMuyMuyLento)
+	pintarGasolina: process(cuentaLineCont,cuentaPixelCont,cuentaGasolina)
 	begin
 		-- inicializacion
 		Rfuel <= "000";
@@ -706,21 +717,21 @@ begin
 		--lineas rojas
 		if ( cuentaLineCont(9 downto 2) >= 4 and cuentaLineCont(9 downto 2) <= 6 and
 			  cuentaPixelCont(10 downto 3) = 116 and 
-			  (cuentaMuyMuyLento(30 downto 24) > "0000000" and cuentaMuyMuyLento(30 downto 24) <= "1110111")) then  
+			  (cuentaGasolina(30 downto 24) > "0000000" and cuentaGasolina(30 downto 24) <= "1110111")) then  
 			Rfuel <= "111";
 			Gfuel <= "000";
 			Bfuel <= "000";
 		end if;
 		if ( cuentaLineCont(9 downto 2) >= 4 and cuentaLineCont(9 downto 2) <= 6 and
 			  cuentaPixelCont(10 downto 3) = 117 and 
-			  (cuentaMuyMuyLento(30 downto 24) > "0001010" and cuentaMuyMuyLento(30 downto 24) <= "1110111")) then 
+			  (cuentaGasolina(30 downto 24) > "0001010" and cuentaGasolina(30 downto 24) <= "1110111")) then 
 			Rfuel <= "111";
 			Gfuel <= "000";
 			Bfuel <= "000"; 
 		end if;
 		if ( cuentaLineCont(9 downto 2) >= 4 and cuentaLineCont(9 downto 2) <= 6 and
 			  cuentaPixelCont(10 downto 3) = 118 and 
-			  (cuentaMuyMuyLento(30 downto 24) > "0010100" and cuentaMuyMuyLento(30 downto 24) <= "1110111")) then 
+			  (cuentaGasolina(30 downto 24) > "0010100" and cuentaGasolina(30 downto 24) <= "1110111")) then 
 			Rfuel <= "111";
 			Gfuel <= "000";
 			Bfuel <= "000";
@@ -728,21 +739,21 @@ begin
 		--lineas naranjas
 		if ( cuentaLineCont(9 downto 2) >= 4 and cuentaLineCont(9 downto 2) <= 6 and
 			  cuentaPixelCont(10 downto 3) = 119 and 
-			  (cuentaMuyMuyLento(30 downto 24) > "0011110" and cuentaMuyMuyLento(30 downto 24) <= "1110111")) then  
+			  (cuentaGasolina(30 downto 24) > "0011110" and cuentaGasolina(30 downto 24) <= "1110111")) then  
 			Rfuel <= "111";
 			Gfuel <= "011";
 			Bfuel <= "000";
 		end if;
 		if ( cuentaLineCont(9 downto 2) >= 4 and cuentaLineCont(9 downto 2) <= 6 and
 			  cuentaPixelCont(10 downto 3) = 120 and 
-			  (cuentaMuyMuyLento(30 downto 24) > "0101000" and cuentaMuyMuyLento(30 downto 24) <= "1110111")) then 
+			  (cuentaGasolina(30 downto 24) > "0101000" and cuentaGasolina(30 downto 24) <= "1110111")) then 
 			Rfuel <= "111";
 			Gfuel <= "011";
 			Bfuel <= "000";
 		end if;
 		if ( cuentaLineCont(9 downto 2) >= 4 and cuentaLineCont(9 downto 2) <= 6 and
 			  cuentaPixelCont(10 downto 3) = 121 and 
-			  (cuentaMuyMuyLento(30 downto 24) > "0110010" and cuentaMuyMuyLento(30 downto 24) <= "1110111")) then 
+			  (cuentaGasolina(30 downto 24) > "0110010" and cuentaGasolina(30 downto 24) <= "1110111")) then 
 			Rfuel <= "111";
 			Gfuel <= "011";
 			Bfuel <= "000";
@@ -750,21 +761,21 @@ begin
 		--lineas amarillas
 		if ( cuentaLineCont(9 downto 2) >= 4 and cuentaLineCont(9 downto 2) <= 6 and
 			  cuentaPixelCont(10 downto 3) = 122 and 
-			  (cuentaMuyMuyLento(30 downto 24) > "0111100" and cuentaMuyMuyLento(30 downto 24) <= "1110111")) then  
+			  (cuentaGasolina(30 downto 24) > "0111100" and cuentaGasolina(30 downto 24) <= "1110111")) then  
 			Rfuel <= "111";
 			Gfuel <= "111";
 			Bfuel <= "000";
 		end if;
 		if ( cuentaLineCont(9 downto 2) >= 4 and cuentaLineCont(9 downto 2) <= 6 and
 			  cuentaPixelCont(10 downto 3) = 123 and 
-			  (cuentaMuyMuyLento(30 downto 24) > "1000110" and cuentaMuyMuyLento(30 downto 24) <= "1110111")) then 
+			  (cuentaGasolina(30 downto 24) > "1000110" and cuentaGasolina(30 downto 24) <= "1110111")) then 
 			Rfuel <= "111";
 			Gfuel <= "111";
 			Bfuel <= "000";
 		end if;
 		if ( cuentaLineCont(9 downto 2) >= 4 and cuentaLineCont(9 downto 2) <= 6 and
 			  cuentaPixelCont(10 downto 3) = 124 and 
-			  (cuentaMuyMuyLento(30 downto 24) > "1010000" and cuentaMuyMuyLento(30 downto 24) <= "1110111")) then 
+			  (cuentaGasolina(30 downto 24) > "1010000" and cuentaGasolina(30 downto 24) <= "1110111")) then 
 			Rfuel <= "111";
 			Gfuel <= "111";
 			Bfuel <= "000";
@@ -772,21 +783,21 @@ begin
 		--lineas verdes
 		if ( cuentaLineCont(9 downto 2) >= 4 and cuentaLineCont(9 downto 2) <= 6 and
 			  cuentaPixelCont(10 downto 3) = 125 and 
-			  (cuentaMuyMuyLento(30 downto 24) > "1011010" and cuentaMuyMuyLento(30 downto 24) <= "1110111")) then  
+			  (cuentaGasolina(30 downto 24) > "1011010" and cuentaGasolina(30 downto 24) <= "1110111")) then  
 			Rfuel <= "000";
 			Gfuel <= "111";
 			Bfuel <= "000";
 		end if;
 		if ( cuentaLineCont(9 downto 2) >= 4 and cuentaLineCont(9 downto 2) <= 6 and
 			  cuentaPixelCont(10 downto 3) = 126 and 
-			  (cuentaMuyMuyLento(30 downto 24) > "1100100" and cuentaMuyMuyLento(30 downto 24) <= "1110111")) then 
+			  (cuentaGasolina(30 downto 24) > "1100100" and cuentaGasolina(30 downto 24) <= "1110111")) then 
 			Rfuel <= "000";
 			Gfuel <= "111";
 			Bfuel <= "000";
 		end if;
 		if ( cuentaLineCont(9 downto 2) >= 4 and cuentaLineCont(9 downto 2) <= 6 and
 			  cuentaPixelCont(10 downto 3) = 127 and 
-			  (cuentaMuyMuyLento(30 downto 24) > "1101110" and cuentaMuyMuyLento(30 downto 24) <= "1110111") ) then 
+			  (cuentaGasolina(30 downto 24) > "1101110" and cuentaGasolina(30 downto 24) <= "1110111") ) then 
 			Rfuel <= "000";
 			Gfuel <= "111";
 			Bfuel <= "000";
@@ -880,29 +891,29 @@ begin
 	end process contadorMuyLento;
 	
 	
-	contadorMuyMuyLento: process(reset,clk,cuentaMuyMuyLento,teclaSPC,pixelNaveVer)  --contador mod 32.000.000 (de 0 a 31.999.999)
+	contadorGasolina: process(reset,clk,cuentaGasolina,teclaSPC,haAterrizado)  --contador mod 32.000.000 (de 0 a 31.999.999)
 	begin
-		if (cuentaMuyMuyLento = "0000000000000000000000000000") then
-			finCuentaMuyMuyLento <= '1';
+		if (cuentaGasolina = "0000000000000000000000000000") then
+			finCuentaGasolina <= '1';
 		else 
-			finCuentaMuyMuyLento <= '0';
+			finCuentaGasolina <= '0';
 		end if;
 		
 		if(reset = '0')then
-			cuentaMuyMuyLento <= "1111010000100011111111111111111";
-			finCuentaMuyMuyLento <= '0';
+			cuentaGasolina <= "1111010000100011111111111111111";
+			finCuentaGasolina <= '0';
 		elsif(clk'event and clk = '1') then
-			if (cuentaMuyMuyLento /= "0000000000000000000000000000") then  
-				cuentaMuyMuyLento <= cuentaMuyMuyLento - 1; 
+			if (cuentaGasolina /= "0000000000000000000000000000") then  
+				cuentaGasolina <= cuentaGasolina - 1; 
 			end if;		
 		end if;
-		if (pixelNaveVer = "1110111" and cuentaMuyMuyLento(30 downto 24) < "1011010") then  --recarga gasolina
-			cuentaMuyMuyLento <= cuentaMuyMuyLento +20; 
+		if (haAterrizado = '1' and cuentaGasolina(30 downto 24) < "1011010") then  --recarga gasolina
+			cuentaGasolina <= cuentaGasolina +20; 
 		end if;
 		if (teclaSPC = '1') then
-			cuentaMuyMuyLento  <= "1111010000100011111111111111111";
+			cuentaGasolina  <= "1111010000100011111111111111111";
 		end if;						
-	end process contadorMuyMuyLento;
+	end process contadorGasolina;
 	
 	
 	contVelVertical: process(reset,clk,cuentaVelVertical,finCuentaLento,teclaSPC,
@@ -913,20 +924,26 @@ begin
 		if(reset = '0')then
 			cuentaVelVertical <= "1000110"; --70: cae a poca velocidad
 		elsif(clk'event and clk = '1') then
-			if  (finCuentaLento = '1' and moverNave = '1') then
+			if  (finCuentaLento = '1' ) then--and moverNave = '1') then
 				--127: con el bit mas sig, si es 0 el resto de bits seran la vel de caida; lo mismo para la de subida cuando bit mas sig igual 1	
 				--hay gravedad:
-				if (cuentaVelVertical < "1111101") then --125
+				if ((haAterrizado = '0' or hayColision = '0') and cuentaVelVertical <= "1111101") then 
 					cuentaVelVertical <= cuentaVelVertical +2;
 				end if;
-				--si usamos los motores, cambiamos la velocidad
+				if (haAterrizado = '1') then
+					cuentaVelVertical <= "1000000"; --no tiene velocidad de caida
+				end if;
 				if (movNave = "001") then --nave hacia arriba
 					if (cuentaVelVertical >= "0000100") then --4
-						cuentaVelVertical <= cuentaVelVertical - 4; 
+						cuentaVelVertical <= cuentaVelVertical - 4;
 					end if;
-				end if;
+					if (haAterrizado = '1') then --hemos aterrizado, si encendemos motores despegamos fuerte
+						cuentaVelVertical <= "0001111"; 	
+					end if;
+				end if; 
 			end if;
 		end if;
+		
 		--generacion de velocidad			
 		muyLentoVertical <= '0';
 		lentoVertical <= '0';
@@ -956,6 +973,7 @@ begin
 	begin
 		-- de 0 a 63, izquierda (para ir izquierda hay que restar)
 		-- de 64 a 127, derecha (para ir derecha hay que sumar)
+				
 		if(reset = '0')then
 			cuentaVelHorizontal <= "1000110"; --70: cae a poca velocidad
 		elsif(clk'event and clk = '1') then
@@ -966,7 +984,8 @@ begin
 					if (cuentaVelHorizontal < "1111011") then --123
 						cuentaVelHorizontal <= cuentaVelHorizontal + 4; 
 					end if;
-				elsif (movNave = "011")	then --nave hacia la izquierda
+				end if;
+				if (movNave = "011")	then --nave hacia la izquierda
 					if (cuentaVelHorizontal >= "0000100") then --4
 						cuentaVelHorizontal <= cuentaVelHorizontal - 4; 
 					end if;
@@ -1006,7 +1025,8 @@ begin
 	begin
 		posNave(14 downto 7) <= pixelNaveHor;
 		posNave(6 downto 0) <= pixelNaveVer;
-	
+		
+		
 		--vertical: cont mod 102 y horizontal: cont mod 153 
 		if (reset = '0')then   --pos inicial coche1
 			pixelNaveVer <= "0001000";  --en 9
@@ -1102,83 +1122,22 @@ begin
 	end process nave;
 	
 	
-	asigMovNave: process(teclaA,teclaW,teclaS,teclaD,cuentaMuyMuyLento)
+	asigMovNave: process(teclaA,teclaW,teclaS,teclaD,cuentaGasolina)
 	begin
 		movNave <= "000";
-		if (cuentaMuyMuyLento(30 downto 24) /= "0000000") then --si queda gasolina, enciendes motores
-			if (teclaW = '1') then movNave <= "001";
-			elsif (teclaS = '1') then movNave <= "010";
-			elsif (teclaA = '1') then movNave <= "011";
-			elsif (teclaD = '1') then movNave <= "100";
-			else movNave <= "000";
-			end if;
+		if (cuentaGasolina(30 downto 24) /= "0000000") then --si queda gasolina, enciendes motores
+			if (teclaW = '1') then movNave <= "001"; end if;
+			if (teclaS = '1') then movNave <= "010"; end if;
+			if (teclaA = '1') then movNave <= "011"; end if;
+			if (teclaD = '1') then movNave <= "100"; end if;
 		end if;
 	end process	asigMovNave;	
-	
-	
-	generacionMundo: process(reset,clk,Q,pixelMundoVer,pixelMundoHor,enableContMundo)
-	begin
-		if (pixelMundoHor = "10011000") then --152:10011000 
-			finCuentaContMundoHor <= '1';
-		else 
-			finCuentaContMundoHor <= '0';
-		end if;
 		
-		if (reset = '0') then
-			pixelMundoVer <= "1011010"; --90 
-			pixelAnteriorVer <= "1011010"; --90 
-			pixelMundoHor <= "00000000";
-			finCuentaContMundoHor <= '0';
-			pixelAleatorio <= '0';
-			
-		elsif (clk'event and clk = '1') then
-			if(enableContMundo = '1' and finCuentaContMundoHor = '0') then 
-				
-				--sube y baja aleatoriamente dependiendo de unos valores fijados
-				-- 0 <= Q <= 32767 (num de pixeles fisicos) 	1/4 = 8191    2/4 = 16383    3/4 = 24573
-					if ((pixelMundoHor >= regBaseDificil1 and pixelMundoHor < regBaseDificil1 +5) or
-						 (pixelMundoHor >= regBaseDificil2 and pixelMundoHor < regBaseDificil2 +5) or
-						 (pixelMundoHor >= regBaseFacil and pixelMundoHor < regBaseFacil +9    ) ) then
-						pixelMundoVer <= pixelMundoVer;					
-					elsif (Q>=0 and Q <= 8191) then 
-						pixelMundoVer <= pixelMundoVer - 2; 
-						if (pixelMundoVer <= "0100111") then pixelMundoVer <= "0100111"; end if; --0100111=pixel logico 39 (el mundo no podrá subir más alla del tercio de la pantalla, para que entre la nave) 
-					elsif (Q>8191 and Q <= 16383) then 
-						pixelMundoVer <= pixelMundoVer - 1; 
-						if (pixelMundoVer <= "0100111") then pixelMundoVer <= "0100111"; end if; --0100111=pixel logico 39				
-					elsif (Q>16383 and Q <= 24573) then 
-						pixelMundoVer <= pixelMundoVer + 2;  
-						if (pixelMundoVer >= "1101110") then pixelMundoVer <= "1101110"; end if; --1101110=pixel logico 110 (el mundo no podrá bajar más alla del pixel 110 de la pantalla, para que se vea) 
-					elsif (Q>24573 and Q <= 32767) then 
-						pixelMundoVer <= pixelMundoVer + 1;  
-						if (pixelMundoVer >= "1101110") then pixelMundoVer <= "1101110"; end if; --1101110=pixel logico 110
-					end if;
-					pixelMundoHor <= pixelMundoHor + 1;				
-				
---				if (pixelMundoVer = "1110111") then --la columna ya estaba pintada, pixelMundoVer= 119
---					pixelMundoHor <= pixelMundoHor + 1;
---					--GENERACION SIGUIENTE PIXEL
---					pixelMundoVer <= Q(6 downto 0);
---				else
---					pixelMundoVer <= pixelMundoVer +1;
---				end if;	
-				
-			elsif (enableContMundo = '0') then
-				pixelMundoVer <= "1011010"; --90
-				pixelMundoHor <= "00000000";
-			end if;
-		end if;	
-	end process generacionMundo;
-	
 	
 	generacionBases: process(clk,reset,Q,contMod3,generarBases,clContMod3,selPixelMundo,
 									 selPixelPantalla)
 	begin
 		if (reset = '0') then
---		regBaseDificil1 <= "0001111";
---		regBaseDificil2 <= "0110000";
---		regBaseFacil <= "0000100";
-		
 			regBaseDificil1 <= "0000000";
 			regBaseDificil2 <= "0000000";
 			regBaseFacil <= "0000000";
@@ -1201,38 +1160,143 @@ begin
 	
 	
 	colision: process(DOAmundo,posNave,selPixelPantalla,pixelNaveHor,regBaseDificil1,
-						regBaseDificil2,regBaseFacil)
+						regBaseDificil2,regBaseFacil,muyRapidoVertical)
 	begin
 		hayColision <= '0';  
-		INhaAterrizado <= '0'; 
+		BiestablehaAterrizado <= '0'; 
 			
 		if ((DOAmundo = "1" and posNave = selPixelPantalla) and not
-			 ((pixelNaveHor >= regBaseDificil1 and pixelNaveHor < regBaseDificil1 +3) or --en base 3_1 
-			  (pixelNaveHor >= regBaseDificil2 and pixelNaveHor < regBaseDificil2 +3) or --en base 3_2
-			  (pixelNaveHor >= regBaseFacil and pixelNaveHor < regBaseFacil +7) --en base facil
+			 ((pixelNaveHor >= regBaseDificil1 and pixelNaveHor < regBaseDificil1 +5) or --en baseDificil1
+			  (pixelNaveHor >= regBaseDificil2 and pixelNaveHor < regBaseDificil2 +5) or --en baseDificil2
+			  (pixelNaveHor >= regBaseFacil and pixelNaveHor < regBaseFacil +9) --en baseFacil
 			 )) then
 			hayColision <= '1';
 		end if;
- 		if (DOAmundo = "1" and posNave = selPixelPantalla and
-			 ((pixelNaveHor >= regBaseDificil1 and pixelNaveHor < regBaseDificil1 +3) or --en base 3_1 
-			  (pixelNaveHor >= regBaseDificil2 and pixelNaveHor < regBaseDificil2 +3) or --en base 3_2
-			  (pixelNaveHor >= regBaseFacil and pixelNaveHor < regBaseFacil +7) --en base facil
-			 )) then
-			INhaAterrizado <= '1';
+		
+ 		if ((DOAmundo = "1" and 
+				(posNave(14 downto 7) = selPixelPantalla(14 downto 7)) and --posicion de la nave
+				(posNave(6 downto 0) = selPixelPantalla(6 downto 0))
+			 ) and
+			 ((pixelNaveHor >= regBaseDificil1 and pixelNaveHor < regBaseDificil1 +5) or --en baseDificil1
+			  (pixelNaveHor >= regBaseDificil2 and pixelNaveHor < regBaseDificil2 +5) or --en baseDificil2
+			  (pixelNaveHor >= regBaseFacil and pixelNaveHor < regBaseFacil +9) --en baseFacil
+			 )) then --si estamos donde la base
+			 
+			if (muyRapidoVertical = '0') then -- and cuentaVelVertical >= "1000000") then --no voy muy rapido hacia abajo
+				BiestablehaAterrizado <= '1';
+			else 
+				hayColision <= '1';
+			end if;
 		end if;
 	end process colision; 
 
 
-	biestable_D_haAterrizado: process(reset,clk,INhaAterrizado,movNave)   --con este biestableD conseguimos que continue el juego si ha aterrizado
+	biestable_D_haAterrizado: process(reset,clk,BiestablehaAterrizado,movNave)   --con este biestableD conseguimos que continue el juego si ha aterrizado
 	begin
 		if(reset = '0')then 
 			haAterrizado <= '0';
-		elsif(clk'event and clk = '1' 
-				--and (movNave = "001" or movNave = "010") --para solo dejar subir y bajar
-				) then
-			haAterrizado <=  INhaAterrizado;
+		elsif(clk'event and clk = '1' ) then
+			if (teclaSPC = '1') then
+				haAterrizado <= '0';
+			end if;
+			if (posNave = selPixelPantalla) then
+				haAterrizado <=  BiestablehaAterrizado;
+			end if;
 		end if;	
 	end process	biestable_D_haAterrizado;
+	
+	
+	
+--maquina de estados de la generacion de mundo -------------------------------------------------
+
+	controladorEstados3: process (clk, reset, estado2, pixelMundoVer) 
+	begin 
+		if(reset = '0') then   
+			estado3 <= generaAleatOBase;
+		elsif (clk'event and clk = '1' and estado2 = iniciando) then
+			estado3 <= generaAleatOBase;  -- estado por defecto, puede ser sobreescrito luego
+			case estado3 is
+				when generaAleatOBase =>
+					estado3 <= guardaPixelVer;
+			
+				when guardaPixelVer =>
+					estado3 <= pintarCol;
+
+				when pintarCol => 
+					estado3 <= pintarCol;
+					if (pixelMundoVer = "1111000") then   --ver 120 
+						estado3 <= generaAleatOBase;
+					end if;	
+
+			end case;
+		end if;
+	end process;
+
+	
+	generadorSalidaMealy3: process (clk,reset,pixelMundoHor,pixelMundoVer,regBaseDificil1,regBaseDificil2,
+											  regBaseFacil,pixelAnteriorVer,Q,estado3) 
+	begin
+		pixelMundoVer <= pixelMundoVer;
+		pixelMundoHor <= pixelMundoHor;
+		pixelAnteriorVer <= pixelAnteriorVer;
+		
+		if (reset = '0') then
+			pixelMundoVer <= "1011010"; --90 
+			pixelAnteriorVer <= "1011010"; --90 
+			pixelMundoHor <= "00000000";
+			finGenerarMundo <= '0';
+		elsif (clk'event and clk = '1') then
+			case estado3 is
+				when generaAleatOBase =>
+					finGenerarMundo <= '0';
+					--si es base
+					if ((pixelMundoHor >= regBaseDificil1 and pixelMundoHor < regBaseDificil1 +5) or
+						 (pixelMundoHor >= regBaseDificil2 and pixelMundoHor < regBaseDificil2 +5) or
+						 (pixelMundoHor >= regBaseFacil and pixelMundoHor < regBaseFacil +9    ) ) then						 
+						pixelAnteriorVer <= pixelAnteriorVer;	
+					--no es base
+					--sube y baja aleatoriamente dependiendo de unos valores fijados
+					-- 0 <= Q <= 32767 (num de pixeles fisicos) 	1/4 = 8191    2/4 = 16383    3/4 = 24573
+					elsif (Q>=0 and Q <= 8191) then 
+							pixelAnteriorVer <= pixelAnteriorVer - 2; 	
+						if (pixelAnteriorVer <= "0100111") then pixelAnteriorVer <= "0100111"; end if; --0100111=pixel logico 39 (el mundo no podrá subir más alla del tercio de la pantalla, para que entre la nave) 
+					elsif (Q>8191 and Q <= 16383) then 
+							pixelAnteriorVer <= pixelAnteriorVer - 1; 
+						if (pixelAnteriorVer <= "0100111") then pixelAnteriorVer <= "0100111"; end if; --0100111=pixel logico 39				
+					elsif (Q>16383 and Q <= 24573) then 
+							pixelAnteriorVer <= pixelAnteriorVer + 2;  
+						if (pixelAnteriorVer >= "1101110") then pixelAnteriorVer <= "1101110"; end if; --1101110=pixel logico 110 (el mundo no podrá bajar más alla del pixel 110 de la pantalla, para que se vea) 
+					elsif (Q>24573 and Q <= 32767) then 
+							pixelAnteriorVer <= pixelAnteriorVer + 1;
+						if (pixelAnteriorVer >= "1101110") then pixelAnteriorVer <= "1101110"; end if; --1101110=pixel logico 110
+					end if;
+						
+				when guardaPixelVer =>		
+					pixelMundoVer <= pixelAnteriorVer;
+			
+				when pintarCol =>						
+					if (pixelMundoVer /= "1111000") then   --ver 120: si es distinto me pintas la columna
+						pixelMundoVer <= pixelMundoVer + 1;
+					elsif (pixelMundoVer = "1111000" and pixelMundoHor /= "10011001") then --ver 120 / hor 153: pasar a siguiente columna
+						pixelMundoHor <= pixelMundoHor + 1;
+					elsif (pixelMundoVer = "1111000" and pixelMundoHor = "10011001") then --ver 120 / hor 153: acabo de generar mundo, reinicio tambien para la sig vez
+						finGenerarMundo <= '1';
+						pixelMundoVer <= "1011010"; --90 
+						pixelAnteriorVer <= "1011010"; --90 
+						pixelMundoHor <= "00000000";
+					end if;
+						
+				when others =>
+					pixelMundoHor <= pixelMundoHor;
+					pixelMundoVer <= pixelMundoVer;
+					pixelAnteriorVer <= pixelAnteriorVer;					
+			end case;
+		end if;
+	end process;
+
+	
+--------------------------------------------------------------------------------	
+	
 
 
 --maquina de estados con registros de flags para el teclado---------------------
@@ -1260,7 +1324,7 @@ begin
 	end process;
 
 
-	generadorSalidaMealy: process (reset,newDataAck, scancode, estado, newData)
+	generadorSalidaMealy: process (newDataAck, scancode, estado, newData)
 	begin
 		newDataAck <= '0';
 		clTeclaW <= '0';		
@@ -1294,7 +1358,7 @@ begin
 						when "00011011" => ldTeclaS <= '0';	  clTeclaS <= '1';	  --S=1B
 						when "00011100" => ldTeclaA <= '0';	  clTeclaA <= '1';	  --A=1C
 						when "00100011" => ldTeclaD <= '0';	  clTeclaD <= '1';	  --D=23 
-						when "00101001" => ldTeclaSPC <= '0'; clTeclaSPC <= '1';  --SPC=29 
+					when "00101001" => ldTeclaSPC <= '0'; clTeclaSPC <= '1';  --SPC=29 
 						when others => null; 
 					end case;
 					newDataAck <= '1'; 
@@ -1377,7 +1441,7 @@ begin
 
 --maquina de estados del juego -------------------------------------------------
 
-	controladorEstados2: process (clk, reset, finCuentaContMundoHor, finCuentaBarrido, 
+	controladorEstados2: process (clk, reset, finGenerarMundo, finCuentaBarrido, 
 									hayColision, teclaSPC) 
 	begin 
 		if(reset = '0') then   
@@ -1387,7 +1451,7 @@ begin
 			case estado2 is
 				when iniciando =>
 					estado2 <= iniciando;
-					if (finCuentaContMundoHor = '1') then 
+					if (finGenerarMundo = '1') then 
 						estado2 <= jugando;
 					end if;
 			
@@ -1425,7 +1489,6 @@ begin
 		enableContBarrido <= '0';
 		--juego:generar
 		clContMod3 <= '1';
-		enableContMundo <= '0';
 		generarBases <= '0';
 		--juego:estado
 		moverNave <= '0';
@@ -1442,7 +1505,6 @@ begin
 				enableContBarrido <= '0'; 
 				--juego:generar
 				clContMod3 <= '0';
-				enableContMundo <= '1'; 
 				generarBases <= '1';
 				--juego:estado
 				moverNave <= '0';
@@ -1457,7 +1519,6 @@ begin
 				enableContBarrido <= '0';--resetea contBarrido
 				--juego:generar
 				clContMod3 <= '0';
-				enableContMundo <= '0';
 				generarBases <= '0';
 				--juego:estado
 				moverNave <= '1';
@@ -1471,7 +1532,6 @@ begin
 				enableContBarrido <= '0'; --resetea contBarrido
 				--juego:generar
 				clContMod3 <= '0'; --no se toca, se necesitan los reg para calcular colisiones
-				enableContMundo <= '0';
 				generarBases <= '0';
 				--juego:estado
 				moverNave <= '0';
@@ -1486,7 +1546,6 @@ begin
 				enableContBarrido <= '1';
 				--juego:generar
 				clContMod3 <= '1'; --para que en iniciando se vuelvan a generar las bases
-				enableContMundo <= '0';
 				generarBases <= '0';
 				--juego:estado
 				moverNave <= '0';
@@ -1515,7 +1574,7 @@ begin
 	--contador para limpiar la ram
 	contBarrido: process(reset,clk,cuentaContBarrido,enableContBarrido)  --contador mod 2^15=32768	(120 x 153 pixeles)
 	begin
-		if (cuentaContBarrido = "111111111111111") then 
+		if (cuentaContBarrido = "111111111111111") then --32768 "111111111111111") then --70000 10001000101110000
 			finCuentaBarrido <= '1';
 		else
 			finCuentaBarrido <= '0';
@@ -1526,7 +1585,7 @@ begin
 			finCuentaBarrido <= '0';
 		elsif(clk'event and clk = '1') then 
 			if(enableContBarrido = '1') then
-				if (cuentaContBarrido /= "111111111111111") then  
+				if (cuentaContBarrido /= "111111111111111") then --32768 "111111111111111") then
 					cuentaContBarrido <= cuentaContBarrido + 1; 
 				end if;
 			elsif (enableContBarrido = '0') then
