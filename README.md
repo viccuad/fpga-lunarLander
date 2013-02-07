@@ -33,8 +33,8 @@ A little FSM with flag registers is used for taking into acount the key presses.
 #### VGA sync and screen painting 
 2 counters are used for creating the vertical and horizontal sync, and are also used for adressing the ram for painting the screen.
 
-## Videos
-# sooooooooooooooooon
+## Video
+[see it here!](http://www.youtube.com/watch?v=YO3Od2-9k7o)
 
 
 ## License 
