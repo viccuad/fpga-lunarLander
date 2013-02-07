@@ -10,6 +10,11 @@ The vhdl code is intended to be as understandable as possible (e.g., process are
 notice: most of the code is in Spanish. Make an issue if you want it translated.
 the design has attached pdfs with handmade rt diagrams.
 
+## GAMEPLAY
+There are two possible gameplay styles, which can be selected using a switch from the fpga board. Those are:
+  1. sile style: the ship goes down the sile, and then it refuels at the bottom of it.
+  2. base style: the ship lands on a base, and refuels there. If it goes down at too much velocity (red velocity at the indicator) it crashes. beware, the ship can slip at the base, be careful when landing and don't go out of the base.
+
 ## DESIGN  
 
 #### Random positions of bases and world 
