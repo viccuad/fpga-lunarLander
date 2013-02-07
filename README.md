@@ -1,10 +1,7 @@
 fpga-lunarLanderGame
 ====================
 
-the atari lunar lander game made with hardware!
-
-
-# refactored and improved code (with better random generation of the world) will be here in a while!
+# the atari lunar lander game made with hardware!
 
 A lunar lander game hardware design in synthesis-able VHDL. Designed to be implemented on a Spartan3
 FPGA, and done using Xilinx ISE webpack 14.3.
