@@ -6,14 +6,7 @@ use UNISIM.vcomponents.all;
 use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.STD_LOGIC_UNSIGNED.ALL;
 
--- juego original lunar lander en: http://my.ign.com/atari/lunar-lander
--- para añadir letras: 
-------https://github.com/FrankBuss/YaGraphCon
-------http://www.frank-buss.de/yagraphcon/index.html
--- mas info:
-------http://stackoverflow.com/questions/4179414/low-level-c-display-text-pixel-by-pixel
-------http://www.angelcode.com/products/bmfont/
-
+-- juego original de atari lunar lander en: http://my.ign.com/atari/lunar-lander
  
 entity lunarLander is 
 	port (
@@ -21,7 +14,7 @@ entity lunarLander is
     ps2Data: IN std_logic;
     clk: IN std_logic;
 	 reset: IN std_logic;    --reset activo a baja!
-	 OUThaAterrizado: OUT std_logic;
+	 modoSiloIN: IN std_logic;
 	 hSync: OUT std_logic;
 	 Vsync: OUT std_logic;
 	 segs: OUT std_logic_vector (6 downto 0);
@@ -29,7 +22,7 @@ entity lunarLander is
 	 G: OUT std_logic_vector (2 downto 0); -- alconversor D/A
 	 B: OUT std_logic_vector (2 downto 0)  -- alconversor D/A
 	);
-end lunarLander;
+end lunar-lander;
 
  
 architecture Behavioral of lunarLander is
@@ -47,11 +40,11 @@ architecture Behavioral of lunarLander is
 	
 	--seniales estados
 	type fsmEstados is (pulsadas, despulsadas);
-	signal estado: fsmEstados;
+	signal estadoTeclado: fsmEstados;
 	type fsmEstados2 is (iniciando, jugando, parado, reseteo);
-	signal estado2: fsmEstados2;
+	signal estadoJuego: fsmEstados2;
 	type fsmEstados3 is (generaAleatOBase, guardaPixelVer, pintarCol);
-	signal estado3: fsmEstados3;
+	signal estadoGenMundo: fsmEstados3;
 	
 	--señales PS2
 	signal newData, newDataAck: std_logic;
@@ -63,9 +56,9 @@ architecture Behavioral of lunarLander is
 	signal cuentaPixelCont: std_logic_vector (10 downto 0);
 	signal cuentaLineCont: std_logic_vector (9 downto 0);
 	signal comp1, comp2, comp3, comp4, comp5, comp6: std_logic;	
-	signal Rnave,Rmundo,Rbase,R_ml,R_l,R_r,R_mr,Rvel,Rfuego,Rfuel: std_logic_vector (2 downto 0); 
-	signal Gnave,Gmundo,Gbase,G_ml,G_l,G_r,G_mr,Gvel,Gfuego,Gfuel: std_logic_vector (2 downto 0); 
-	signal Bnave,Bmundo,Bbase,B_ml,B_l,B_r,B_mr,Bvel,Bfuego,Bfuel: std_logic_vector (2 downto 0);
+	signal Rnave,Rmundo,Rbase,R_ml,R_l,R_r,R_mr,Rvel,Rfuego,Rfuel,Rboom: std_logic_vector (2 downto 0); 
+	signal Gnave,Gmundo,Gbase,G_ml,G_l,G_r,G_mr,Gvel,Gfuego,Gfuel,Gboom: std_logic_vector (2 downto 0); 
+	signal Bnave,Bmundo,Bbase,B_ml,B_l,B_r,B_mr,Bvel,Bfuego,Bfuel,Bboom: std_logic_vector (2 downto 0);
 	
 	 --seniales registro lsfr
 	signal D,Q: std_logic_vector (14 downto 0);
@@ -101,7 +94,7 @@ architecture Behavioral of lunarLander is
 	signal cuentaContBarrido: std_logic_vector(14 downto 0);
 	signal finCuentaBarrido,enableContBarrido,hayColision: std_logic;
 	signal finGenerarMundo: std_logic;
-	
+	signal ModoSilo: std_logic;
 	--seniales memorias
 	signal DOAmundoMenosSig,DOAmundoMasSig,DOBmundoMenosSig,DOBmundoMasSig: std_logic_vector(0 downto 0);
 	signal selPixelPantalla: std_logic_vector (14 downto 0);  -- pixeles logicos hor (120) concatenado con pixeles logicos ver (153): cuentaPixelCont(10 downto 3)++cuentaLineCont(8 downto 2)
@@ -115,8 +108,8 @@ architecture Behavioral of lunarLander is
 
 begin
 
-	OUThaAterrizado <= BiestableHaAterrizado;
-	
+	--entradas:
+	modoSilo <= modoSiloIN;
 	
 --------------------------- RAM ------------------------------------------------
 
@@ -195,7 +188,7 @@ begin
 
 	pantalla: process(clk, reset,cuentaPixelCont,cuentaLineCont,Rnave,Rmundo,Gnave,Gmundo,
 							Bnave,Bmundo,Rbase,Gbase,Bbase,Rvel,Gvel,Bvel,Rfuego,Gfuego,Bfuego,
-							Rfuel,Gfuel,Bfuel,teclaW,cuentaMuyLento,teclaA,teclaD)
+							Rfuel,Gfuel,Bfuel,Rboom,Gboom,Bboom,teclaW,cuentaMuyLento,teclaA,teclaD)
 	begin
 		
 		--cont mod 1589 (pixelCont para sincronismo horizontal)
@@ -245,15 +238,15 @@ begin
 			G <= "000";
 			B <= "000";
 		else --pintamos lo que tengamos que pintar
-			R(2) <= ( (not (comp1 or comp4))  and  (Rnave(2) or Rmundo(2) or Rbase(2) or Rvel(2) or Rfuego(2) or Rfuel(2)) );
-			R(1) <= ( (not (comp1 or comp4))  and  (Rnave(1) or Rmundo(1) or Rbase(1) or Rvel(1) or Rfuego(1) or Rfuel(1)) );
-			R(0) <= ( (not (comp1 or comp4))  and  (Rnave(0) or Rmundo(0) or Rbase(0) or Rvel(0) or Rfuego(0) or Rfuel(0)) );
-			G(2) <= ( (not (comp1 or comp4))  and  (Gnave(2) or Gmundo(2) or Gbase(2) or Gvel(2) or Gfuego(2) or Gfuel(2)) );
-			G(1) <= ( (not (comp1 or comp4))  and  (Gnave(1) or Gmundo(1) or Gbase(1) or Gvel(1) or Gfuego(1) or Gfuel(1)) );
-			G(0) <= ( (not (comp1 or comp4))  and  (Gnave(0) or Gmundo(0) or Gbase(0) or Gvel(0) or Gfuego(0) or Gfuel(0)) );
-			B(2) <= ( (not (comp1 or comp4))  and  (Bnave(2) or Bmundo(2) or Bbase(2) or Bvel(2) or Bfuego(2) or Bfuel(2)) );
-			B(1) <= ( (not (comp1 or comp4))  and  (Bnave(1) or Bmundo(1) or Bbase(1) or Bvel(1) or Bfuego(1) or Bfuel(1)) );
-			B(0) <= ( (not (comp1 or comp4))  and  (Bnave(0) or Bmundo(0) or Bbase(0) or Bvel(0) or Bfuego(0) or Bfuel(0)) );
+			R(2) <= ( (not (comp1 or comp4))  and  (Rnave(2) or Rmundo(2) or Rbase(2) or Rvel(2) or Rfuego(2) or Rfuel(2) or Rboom(2)) );
+			R(1) <= ( (not (comp1 or comp4))  and  (Rnave(1) or Rmundo(1) or Rbase(1) or Rvel(1) or Rfuego(1) or Rfuel(1) or Rboom(1)) );
+			R(0) <= ( (not (comp1 or comp4))  and  (Rnave(0) or Rmundo(0) or Rbase(0) or Rvel(0) or Rfuego(0) or Rfuel(0) or Rboom(0)) );
+			G(2) <= ( (not (comp1 or comp4))  and  (Gnave(2) or Gmundo(2) or Gbase(2) or Gvel(2) or Gfuego(2) or Gfuel(2) or Gboom(2)) );
+			G(1) <= ( (not (comp1 or comp4))  and  (Gnave(1) or Gmundo(1) or Gbase(1) or Gvel(1) or Gfuego(1) or Gfuel(1) or Gboom(1)) );
+			G(0) <= ( (not (comp1 or comp4))  and  (Gnave(0) or Gmundo(0) or Gbase(0) or Gvel(0) or Gfuego(0) or Gfuel(0) or Gboom(0)) );
+			B(2) <= ( (not (comp1 or comp4))  and  (Bnave(2) or Bmundo(2) or Bbase(2) or Bvel(2) or Bfuego(2) or Bfuel(2) or Bboom(2)) );
+			B(1) <= ( (not (comp1 or comp4))  and  (Bnave(1) or Bmundo(1) or Bbase(1) or Bvel(1) or Bfuego(1) or Bfuel(1) or Bboom(1)) );
+			B(0) <= ( (not (comp1 or comp4))  and  (Bnave(0) or Bmundo(0) or Bbase(0) or Bvel(0) or Bfuego(0) or Bfuel(0) or Bboom(0)) );
 		end if;
 
 	end process;
@@ -378,56 +371,198 @@ begin
 	
 	
 	pintarBases: process(cuentaLineCont,cuentaPixelCont,DOAmundo,regBaseDificil1,
-							regBaseDificil2,regBaseFacil)
+								regBaseDificil2,regBaseFacil,modoSilo)
 	begin
 		-- inicializacion
 		Rbase <= "000";
 		Gbase <= "000";
 		Bbase <= "000";
 
-		--pintar base3_1
+		--pintar baseDificil1
 		if (DOAmundo = "1" and 
 			 (cuentaPixelCont(10 downto 3) >= regBaseDificil1 and 
-			  cuentaPixelCont(10 downto 3) < regBaseDificil1 +5) and 
-			  cuentaLineCont(8 downto 2) = "1101110" 
-			  ) then
-			  
-			  		--F de fuel
-			if ( cuentaLineCont(8 downto 2) >= 110 and cuentaLineCont(8 downto 2) <= 113 and
-			  cuentaPixelCont(10 downto 3) = regBaseDificil1 + 1) then  
-				Rbase <= "111";
-				Gbase <= "111";
-				Bbase <= "111";
+			  cuentaPixelCont(10 downto 3) <= regBaseDificil1 +4) ) then
+			
+			if (modoSilo = '1') then
+				Rbase <= "000";
+				Gbase <= "000";
+				Bbase <= "100";
+			else 
+				--pintar lineas
+				if ( cuentaLineCont(9 downto 2) <= 105  and
+					 (cuentaPixelCont(10 downto 3) = regBaseDificil1 or
+					  cuentaPixelCont(10 downto 3) = regBaseDificil1 + 4) )then  
+					Rbase <= "111";
+					Gbase <= "111";
+					Bbase <= "111";
+				end if;
+				--F de fuel
+				if ( cuentaLineCont(9 downto 2) >= 110 and cuentaLineCont(9 downto 2) <= 113 and
+				  cuentaPixelCont(10 downto 3) = regBaseDificil1 +1) then  
+					Rbase <= "111";
+					Gbase <= "111";
+					Bbase <= "111";
+				end if;
+				if ( (cuentaLineCont(9 downto 2) = 110 or cuentaLineCont(9 downto 2) = 112) and
+				  cuentaPixelCont(10 downto 3) = regBaseDificil1 + 2) then  
+					Rbase <= "111";
+					Gbase <= "111";
+					Bbase <= "111";
+				end if;
 			end if;
-			if ( (cuentaLineCont(8 downto 2) = 110 or cuentaLineCont(8 downto 2) = 112) and
-			  cuentaPixelCont(10 downto 3) = regBaseDificil1 + 2) then  
-				Rbase <= "111";
-				Gbase <= "111";
-				Bbase <= "111";
-			end if;
-			  
---			  
---			Rbase <= "100";
---			Gbase <= "100";
---			Bbase <= "100";
-		end if;			
-		--pintar base3_2
-		if (DOAmundo = "1" and  
+		end if;		  
+
+		
+		--pintar baseDificil2
+		if (DOAmundo = "1" and 
 			 (cuentaPixelCont(10 downto 3) >= regBaseDificil2 and 
-			  cuentaPixelCont(10 downto 3) < regBaseDificil2 +5) ) then
-			Rbase <= "100";
-			Gbase <= "100";
-			Bbase <= "000";
-		end if;		
+			  cuentaPixelCont(10 downto 3) <= regBaseDificil2 +4) ) then
+			
+			if (modoSilo = '1') then
+				Rbase <= "000";
+				Gbase <= "000";
+				Bbase <= "100";
+			else 
+				--pintar lineas
+				if ( cuentaLineCont(9 downto 2) <= 105  and
+					 (cuentaPixelCont(10 downto 3) = regBaseDificil2 or
+					  cuentaPixelCont(10 downto 3) = regBaseDificil2 + 4) )then  
+					Rbase <= "111";
+					Gbase <= "111";
+					Bbase <= "111";
+				end if;
+				--F de fuel
+				if ( cuentaLineCont(9 downto 2) >= 110 and cuentaLineCont(9 downto 2) <= 113 and
+				  cuentaPixelCont(10 downto 3) = regBaseDificil2 +1) then  
+					Rbase <= "111";
+					Gbase <= "111";
+					Bbase <= "111";
+				end if;
+				if ( (cuentaLineCont(9 downto 2) = 110 or cuentaLineCont(9 downto 2) = 112) and
+				  cuentaPixelCont(10 downto 3) = regBaseDificil2 + 2) then  
+					Rbase <= "111";
+					Gbase <= "111";
+					Bbase <= "111";
+				end if;
+			end if;
+		end if;
+			
 		--pintar base facil
 		if (DOAmundo = "1" and 
 			 (cuentaPixelCont(10 downto 3) >= regBaseFacil and 
-			  cuentaPixelCont(10 downto 3) < regBaseFacil +9) ) then
-			Rbase <= "100";
-			Gbase <= "100";
-			Bbase <= "000";
-		end if;		
+			  cuentaPixelCont(10 downto 3) <= regBaseFacil +8) ) then
+			if (modoSilo = '1') then
+				Rbase <= "100";
+				Gbase <= "000";
+				Bbase <= "000";
+			else 
+				--pintar lineas
+				if ( cuentaLineCont(9 downto 2) <= 105  and
+					 (cuentaPixelCont(10 downto 3) = regBaseFacil or
+					  cuentaPixelCont(10 downto 3) = regBaseFacil + 8) )then  
+					Rbase <= "111";
+					Gbase <= "111";
+					Bbase <= "111";
+				end if;
+				--F de fuel
+				if ( cuentaLineCont(9 downto 2) >= 110 and cuentaLineCont(9 downto 2) <= 113 and
+				  cuentaPixelCont(10 downto 3) = regBaseFacil + 3) then  
+					Rbase <= "111";
+					Gbase <= "111";
+					Bbase <= "111";
+				end if;
+				if ( (cuentaLineCont(9 downto 2) = 110 or cuentaLineCont(9 downto 2) = 112) and
+				  cuentaPixelCont(10 downto 3) = regBaseFacil + 4) then  
+					Rbase <= "111";
+					Gbase <= "111";
+					Bbase <= "111";
+				end if;	
+			end if;
+		end if;
 	end process pintarBases;
+	
+	pintarBoom: process(estadoJuego,cuentaLineCont,cuentaPixelCont)
+	begin
+		-- inicializacion
+		Rboom <= "000";
+		Gboom <= "000";
+		Bboom <= "000";
+
+		--pintar boom!
+		if (estadoJuego = parado) then
+			
+			--pintar B
+			if ( (cuentaLineCont(9 downto 2) >= 36 and  cuentaLineCont(9 downto 2) <= 40) and
+			     (cuentaPixelCont(10 downto 3) = 66 or cuentaPixelCont(10 downto 3) = 68)) then  
+				Rboom <= "111";
+				Gboom <= "111";
+				Bboom <= "111";
+			end if;
+			if ((cuentaLineCont(9 downto 2) = 36 or 
+			     cuentaLineCont(9 downto 2) = 38  or cuentaLineCont(9 downto 2) = 40 ) and
+				 cuentaPixelCont(10 downto 3) = 67 ) then  
+				Rboom <= "111";
+				Gboom <= "111";
+				Bboom <= "111";
+			end if;
+			--pintar primera O
+			if ( (cuentaLineCont(9 downto 2) >= 36 and  cuentaLineCont(9 downto 2) <= 40) and
+			     (cuentaPixelCont(10 downto 3) = 70 or cuentaPixelCont(10 downto 3) = 72)) then  
+				Rboom <= "111";
+				Gboom <= "111";
+				Bboom <= "111";
+			end if;
+			if ( (cuentaLineCont(9 downto 2) = 36 or  cuentaLineCont(9 downto 2) = 40) and
+			     cuentaPixelCont(10 downto 3) = 71) then  
+				Rboom <= "111";
+				Gboom <= "111";
+				Bboom <= "111";
+			end if;
+			--pintar segunda O
+			if ( (cuentaLineCont(9 downto 2) >= 36 and  cuentaLineCont(9 downto 2) <= 40) and
+			     (cuentaPixelCont(10 downto 3) = 74 or cuentaPixelCont(10 downto 3) = 76)) then  
+				Rboom <= "111";
+				Gboom <= "111";
+				Bboom <= "111";
+			end if;
+			if ( (cuentaLineCont(9 downto 2) = 36 or  cuentaLineCont(9 downto 2) = 40) and
+			     cuentaPixelCont(10 downto 3) = 75) then  
+				Rboom <= "111";
+				Gboom <= "111";
+				Bboom <= "111";
+			end if;
+			--pintar M
+			if ( (cuentaLineCont(9 downto 2) >= 36 and  cuentaLineCont(9 downto 2) <= 40) and
+			     (cuentaPixelCont(10 downto 3) = 78 or cuentaPixelCont(10 downto 3) = 82)) then  
+				Rboom <= "111";
+				Gboom <= "111";
+				Bboom <= "111";
+			end if;
+			if ( (cuentaLineCont(9 downto 2) = 37) and
+			     (cuentaPixelCont(10 downto 3) = 79 or cuentaPixelCont(10 downto 3) = 81)) then  
+				Rboom <= "111";
+				Gboom <= "111";
+				Bboom <= "111";
+			end if;
+			if ( (cuentaLineCont(9 downto 2) = 38) and
+			     cuentaPixelCont(10 downto 3) = 80) then  
+				Rboom <= "111";
+				Gboom <= "111";
+				Bboom <= "111";
+			end if;
+			--pintar '!'
+			if ( ((cuentaLineCont(9 downto 2) >= 36 and  cuentaLineCont(9 downto 2) <= 38) or 
+					 cuentaLineCont(9 downto 2) = 40 ) and
+			     (cuentaPixelCont(10 downto 3) = 85)) then  
+				Rboom <= "111";
+				Gboom <= "111";
+				Bboom <= "111";
+			end if;
+			
+			
+		end if;			
+	end process pintarBoom;
+	
 	
 	
 	Rvel(2) <= (R_ml(2) or R_l(2) or R_r(2) or R_mr(2));
@@ -906,13 +1041,20 @@ begin
 			if (cuentaGasolina /= "0000000000000000000000000000") then  
 				cuentaGasolina <= cuentaGasolina - 1; 
 			end if;		
+			if (modoSilo = '0') then
+				if (haAterrizado = '1' and cuentaGasolina(30 downto 24) < "1101110") then  --recarga gasolina
+					cuentaGasolina <= cuentaGasolina +20; 
+				end if;
+			else 
+				if (pixelNaveVer = "1110111" and cuentaGasolina(30 downto 24) < "1101110") then  --recarga gasolina
+					cuentaGasolina <= cuentaGasolina +20; 
+				end if;
+			end if;
+			if (teclaSPC = '1') then
+				cuentaGasolina  <= "1111010000100011111111111111111";
+			end if;	
 		end if;
-		if (haAterrizado = '1' and cuentaGasolina(30 downto 24) < "1011010") then  --recarga gasolina
-			cuentaGasolina <= cuentaGasolina +20; 
-		end if;
-		if (teclaSPC = '1') then
-			cuentaGasolina  <= "1111010000100011111111111111111";
-		end if;						
+							
 	end process contadorGasolina;
 	
 	
@@ -1160,7 +1302,7 @@ begin
 	
 	
 	colision: process(DOAmundo,posNave,selPixelPantalla,pixelNaveHor,regBaseDificil1,
-						regBaseDificil2,regBaseFacil,muyRapidoVertical)
+						regBaseDificil2,regBaseFacil,muyRapidoVertical,modoSilo)
 	begin
 		hayColision <= '0';  
 		BiestablehaAterrizado <= '0'; 
@@ -1173,7 +1315,7 @@ begin
 			hayColision <= '1';
 		end if;
 		
- 		if ((DOAmundo = "1" and 
+ 		if ((DOAmundo = "1" and modoSilo = '0' and 
 				(posNave(14 downto 7) = selPixelPantalla(14 downto 7)) and --posicion de la nave
 				(posNave(6 downto 0) = selPixelPantalla(6 downto 0))
 			 ) and
@@ -1182,7 +1324,7 @@ begin
 			  (pixelNaveHor >= regBaseFacil and pixelNaveHor < regBaseFacil +9) --en baseFacil
 			 )) then --si estamos donde la base
 			 
-			if (muyRapidoVertical = '0') then -- and cuentaVelVertical >= "1000000") then --no voy muy rapido hacia abajo
+			if (muyRapidoVertical = '0') then --no voy muy rapido hacia abajo
 				BiestablehaAterrizado <= '1';
 			else 
 				hayColision <= '1';
@@ -1209,32 +1351,32 @@ begin
 	
 --maquina de estados de la generacion de mundo -------------------------------------------------
 
-	controladorEstados3: process (clk, reset, estado2, pixelMundoVer) 
+	controladorFSMgeneracionMundo: process (clk, reset, estadoJuego, pixelMundoVer) 
 	begin 
 		if(reset = '0') then   
-			estado3 <= generaAleatOBase;
-		elsif (clk'event and clk = '1' and estado2 = iniciando) then
-			estado3 <= generaAleatOBase;  -- estado por defecto, puede ser sobreescrito luego
-			case estado3 is
+			estadoGenMundo <= generaAleatOBase;
+		elsif (clk'event and clk = '1' and estadoJuego = iniciando) then
+			estadoGenMundo <= generaAleatOBase;  -- estado por defecto, puede ser sobreescrito luego
+			case estadoGenMundo is
 				when generaAleatOBase =>
-					estado3 <= guardaPixelVer;
+					estadoGenMundo <= guardaPixelVer;
 			
 				when guardaPixelVer =>
-					estado3 <= pintarCol;
+					estadoGenMundo <= pintarCol;
 
 				when pintarCol => 
-					estado3 <= pintarCol;
+					estadoGenMundo <= pintarCol;
 					if (pixelMundoVer = "1111000") then   --ver 120 
-						estado3 <= generaAleatOBase;
+						estadoGenMundo <= generaAleatOBase;
 					end if;	
 
 			end case;
 		end if;
-	end process;
+	end process controladorFSMgeneracionMundo;
 
 	
-	generadorSalidaMealy3: process (clk,reset,pixelMundoHor,pixelMundoVer,regBaseDificil1,regBaseDificil2,
-											  regBaseFacil,pixelAnteriorVer,Q,estado3) 
+	generadorMealyFSMgeneracionMundo: process (clk,reset,pixelMundoHor,pixelMundoVer,regBaseDificil1,regBaseDificil2,
+											  regBaseFacil,pixelAnteriorVer,Q,estadoGenMundo) 
 	begin
 		pixelMundoVer <= pixelMundoVer;
 		pixelMundoHor <= pixelMundoHor;
@@ -1246,7 +1388,7 @@ begin
 			pixelMundoHor <= "00000000";
 			finGenerarMundo <= '0';
 		elsif (clk'event and clk = '1') then
-			case estado3 is
+			case estadoGenMundo is
 				when generaAleatOBase =>
 					finGenerarMundo <= '0';
 					--si es base
@@ -1292,7 +1434,7 @@ begin
 					pixelAnteriorVer <= pixelAnteriorVer;					
 			end case;
 		end if;
-	end process;
+	end process generadorMealyFSMgeneracionMundo;
 
 	
 --------------------------------------------------------------------------------	
@@ -1301,30 +1443,30 @@ begin
 
 --maquina de estados con registros de flags para el teclado---------------------
 
-	controladorEstados: process (clk, reset, newData, scancode) 
+	controladorFSMteclado: process (clk, reset, newData, scancode) 
 	begin 
 		if(reset = '0') then   
-			estado <= pulsadas;
+			estadoTeclado <= pulsadas;
 		elsif (clk'event and clk = '1') then
-			estado <= pulsadas;  -- estado por defecto, puede ser sobreescrito luego
-			case estado is
+			estadoTeclado <= pulsadas;  -- estado por defecto, puede ser sobreescrito luego
+			case estadoTeclado is
 				when pulsadas => 
-					estado <= pulsadas;
+					estadoTeclado <= pulsadas;
 					if (newData = '1' and scancode = "11110000") then  --11110000: F0
-						estado <= despulsadas;
+						estadoTeclado <= despulsadas;
 					end if;
 					
 				when despulsadas =>
-					estado <= despulsadas;
+					estadoTeclado <= despulsadas;
 					if (newData = '1') then
-						estado <= pulsadas;
+						estadoTeclado <= pulsadas;
 					end if;					
 			end case;
 		end if;
-	end process;
+	end process controladorFSMteclado;
 
 
-	generadorSalidaMealy: process (newDataAck, scancode, estado, newData)
+	generadorMealyFSMteclado: process (newDataAck, scancode, estadoTeclado, newData)
 	begin
 		newDataAck <= '0';
 		clTeclaW <= '0';		
@@ -1337,7 +1479,7 @@ begin
 		ldTeclaA <= '0';		
 		ldTeclaD <= '0';		
 		ldTeclaSPC <= '0';	
-		case estado is
+		case estadoTeclado is
 			when pulsadas =>
 				if (newData = '1') then  --11110000: F0
 					case scancode is   	--registros de flags:
@@ -1366,7 +1508,7 @@ begin
 
 			when others => null;	
 		end case;
-	end process;
+	end process generadorMealyFSMteclado;
 	
 	
 	biestableDteclaSPC: process(reset,clk,ldTeclaSPC,clTeclaSPC)
@@ -1441,46 +1583,46 @@ begin
 
 --maquina de estados del juego -------------------------------------------------
 
-	controladorEstados2: process (clk, reset, finGenerarMundo, finCuentaBarrido, 
+	controladorFSMjuego: process (clk, reset, finGenerarMundo, finCuentaBarrido, 
 									hayColision, teclaSPC) 
 	begin 
 		if(reset = '0') then   
-			estado2 <= iniciando;
+			estadoJuego <= iniciando;
 		elsif (clk'event and clk = '1') then
-			estado2 <= iniciando;  -- estado por defecto, puede ser sobreescrito luego
-			case estado2 is
+			estadoJuego <= iniciando;  -- estado por defecto, puede ser sobreescrito luego
+			case estadoJuego is
 				when iniciando =>
-					estado2 <= iniciando;
+					estadoJuego <= iniciando;
 					if (finGenerarMundo = '1') then 
-						estado2 <= jugando;
+						estadoJuego <= jugando;
 					end if;
 			
 				when jugando =>
-					estado2 <= jugando;
+					estadoJuego <= jugando;
 					if (hayColision = '1') then 
-						estado2 <= parado;
+						estadoJuego <= parado;
 					end if;
 					if (teclaSPC = '1') then 
-						estado2 <= reseteo;
+						estadoJuego <= reseteo;
 					end if;	
 				
 				when parado =>
-					estado2 <= parado;
+					estadoJuego <= parado;
 					if (teclaSPC = '1') then 
-						estado2 <= reseteo;
+						estadoJuego <= reseteo;
 					end if;	
 
 				when reseteo => 
-					estado2 <= reseteo;
+					estadoJuego <= reseteo;
 					if (finCuentaBarrido = '1') then  
-						estado2 <= iniciando;
+						estadoJuego <= iniciando;
 					end if;					
 			end case;
 		end if;
-	end process;
+	end process controladorFSMjuego;
 
 	
-	generadorSalidaMoore2: process (estado2) 
+	generadorMooreJuego: process (estadoJuego) 
 	begin
 		--memorias
 		senialWEA <= '0';
@@ -1495,7 +1637,7 @@ begin
 		st <= "000";
 		
 
-		case estado2 is
+		case estadoJuego is
 			when iniciando =>	
 				-- escribo por puerto B	
 				--memorias
@@ -1553,7 +1695,7 @@ begin
 			
 			when others => null;	
 		end case;
-	end process;
+	end process generadorMooreJuego;
 	
 	
 	conversor7seg: process(st)

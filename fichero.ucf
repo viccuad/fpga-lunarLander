@@ -11,7 +11,7 @@ NET clk LOC = P8;
 
 	#switches placa extendida
 
-#NET a<0> LOC=P12;
+NET modoSiloIN LOC=P12;
 #NET a<1> LOC=J1;
 #NET a<2> LOC=H1;
 #NET a<3> LOC=H3;
@@ -34,8 +34,8 @@ NET reset LOC=M3;
 
 #barra de leds placa extendida
 
-NET aterrizadoOUT LOC=L5;
-#NET DI1 LOC=N2;
+#NET OUThaAterrizado LOC=L5;
+#NET OUThayColision LOC=N2;
 #NET DI2 LOC=M3;
 #NET DI1<0> LOC=N1;
 #NET DI2<0> LOC=T13;
