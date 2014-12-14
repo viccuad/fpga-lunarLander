@@ -8,7 +8,7 @@ FPGA, and done using Xilinx ISE webpack 14.3.
 The vhdl code is intended to be as understandable as possible (e.g., process are written to be as close as the rt diagram, instead of wrapping various components in one process).
 
 notice: most of the code is in Spanish. Make an issue if you want it translated.
-the design has attached pdfs with handmade rt diagrams.
+
 
 ## GAMEPLAY
 There are two possible gameplay styles, which can be selected using a switch from the fpga board. Those are:
@@ -16,6 +16,10 @@ There are two possible gameplay styles, which can be selected using a switch fro
   2. base style: the ship lands on a base, and refuels there. If it goes down at too much velocity (red velocity at the indicator) it crashes. beware, the ship can slip at the base, be careful when landing and don't go out of the base.
 
 ## DESIGN  
+
+As the design is quite big, I haven't captured on paper first. If you want to
+see how I use to do such thing, you can take a look at other FPGA designs at
+[https://github.com/viccuad/fpga-thingies](https://github.com/viccuad/fpga-thingies).
 
 #### Random positions of bases and world 
 A Linear feedback shift register is used for implementing a pseudo-random number generator, as seen in this [paper](http://www.xilinx.com/support/documentation/application_notes/xapp052.pdf). The pseudo random generator is used for generating the world and bases.
