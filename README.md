@@ -17,7 +17,7 @@ There are two possible gameplay styles, which can be selected using a switch fro
 
 ## DESIGN  
 
-As the design is quite big, I haven't captured on paper first. If you want to
+As the design is quite big, I haven't captured it on paper first. If you want to
 see how I use to do such thing, you can take a look at other FPGA designs at
 [https://github.com/viccuad/fpga-thingies](https://github.com/viccuad/fpga-thingies).
 
