@@ -1,4 +1,4 @@
-fpga-lunarLanderGame
+fpga-lunarLander
 ====================
 
 # the atari lunar lander game made with hardware!
